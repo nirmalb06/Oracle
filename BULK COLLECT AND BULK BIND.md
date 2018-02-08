@@ -2,12 +2,15 @@ BULK COLLECT AND BULK BIND
 ----------------------------
 Bulk binds can improve the performance when loading collections from a queries. The BULK COLLECT INTO construct binds the output of the query to the collection. To test this create the following table.
 
+
 CREATE TABLE bulk_collect_test AS
 SELECT owner,
        object_name,
        object_id
 FROM   all_objects;
+
 The following code compares the time taken to populate a collection manually and using a bulk bind.
+
 
 SET SERVEROUTPUT ON
 DECLARE
@@ -46,11 +49,15 @@ Bulk    (42578 rows): 4
 PL/SQL procedure successfully completed.
 
 SQL>
+
 We can see the improvement associated with bulk operations to reduce context switches.
 
+
  The select list must match the collections record definition exactly for this to be successful.
+ 
 
 Remember that collections are held in memory, so doing a bulk collect from a large query could cause a considerable performance problem. In actual fact you would rarely do a straight bulk collect in this manner. Instead you would limit the rows returned using the LIMIT clause and move through the data processing smaller chunks. This gives you the benefits of bulk binds, without hogging all the server memory. The following code shows how to chunk through the data in a large table.
+
 
 SET SERVEROUTPUT ON
 DECLARE
@@ -83,9 +90,12 @@ END;
 PL/SQL procedure successfully completed.
 
 SQL>
+
 So we can see that with a LIMIT 10000 we were able to break the data into chunks of 10,000 rows, reducing the memory footprint of our application, while still taking advantage of bulk binds. The array size you pick will depend on the width of the rows you are returning and the amount of memory you are happy to use.
 
+
 From Oracle 10g onward, the optimizing PL/SQL compiler converts cursor FOR LOOPs into BULK COLLECTs with an array size of 100. The following example compares the speed of a regular cursor FOR LOOP with BULK COLLECTs using varying array sizes.
+
 
 SET SERVEROUTPUT ON
 DECLARE
@@ -162,10 +172,15 @@ LIMIT 1000: 10
 PL/SQL procedure successfully completed.
 
 SQL>
+
 You can see from this example the performance of a regular FOR LOOP is comparable to a BULK COLLECT using an array size of 100. Does this mean you can forget about BULK COLLECT in 10g onward? In my opinion no. I think it makes sense to have control of the array size. If you have very small rows, you might want to increase the array size substantially. If you have very wide rows, 100 may be too large an array size.
 
+
 FORALL
+-------
+
 The FORALL syntax allows us to bind the contents of a collection to a single DML statement, allowing the DML to be run for each row in the collection without requiring a context switch each time. To test bulk binds using records we first create a test table.
+
 
 CREATE TABLE forall_test (
   id           NUMBER(10),
@@ -229,11 +244,15 @@ Bulk Inserts  : 14
 PL/SQL procedure successfully completed.
 
 SQL>
+
 The output clearly demonstrates the performance improvements you can expect to see when using bulk binds to remove the context switches between the SQL and PL/SQL engines.
 
+
  Since no columns are specified in the insert statement the record structure of the collection must match the table exactly.
+ 
 
 Oracle9i Release 2 also allows updates using record definitions by using the ROW keyword. The following example uses the ROW keyword, when doing a comparison of normal and bulk updates.
+
 
 SET SERVEROUTPUT ON
 DECLARE
@@ -288,14 +307,21 @@ Bulk Updates   : 20
 PL/SQL procedure successfully completed.
 
 SQL>
+
 The reference to the ID column within the WHERE clause of the first update would cause the bulk operation to fail, so the second update uses a separate collection for the ID column. This restriction has been lifted in Oracle 11g, as documented here.
+
 
 Once again, the output shows the performance improvements you can expect to see when using bulk binds.
 
+
 SQL%BULK_ROWCOUNT
+-----------------
+
 The SQL%BULK_ROWCOUNT cursor attribute gives granular information about the rows affected by each iteration of the FORALL statement. Every row in the driving collection has a corresponding row in the SQL%BULK_ROWCOUNT cursor attribute.
 
+
 The following code creates a test table as a copy of the ALL_USERS view. It then attempts to delete 5 rows from the table based on the contents of a collection. It then loops through the SQL%BULK_ROWCOUNT cursor attribute looking at the number of rows affected by each delete.
+
 
 CREATE TABLE bulk_rowcount_test AS
 SELECT *
@@ -327,16 +353,23 @@ Element: BANANA          Rows affected: 0
 
 PL/SQL procedure successfully completed.
 
+
 SQL>
 So we can see that no rows were deleted when we performed a delete for the username "BANANA".
 
+
 SAVE EXCEPTIONS and SQL%BULK_EXCEPTION
+----------------------------------------
+
 We saw how the FORALL syntax allows us to perform bulk DML operations, but what happens if one of those individual operations results in an exception? If there is no exception handler, all the work done by the current bulk operation is rolled back. If there is an exception handler, the work done prior to the exception is kept, but no more processing is done. Neither of these situations is very satisfactory, so instead we should use the SAVE EXCEPTIONS clause to capture the exceptions and allow us to continue past them. We can subsequently look at the exceptions by referencing the SQL%BULK_EXCEPTION cursor attribute. To see this in action create the following table.
+
 
 CREATE TABLE exception_test (
   id  NUMBER(10) NOT NULL
 );
+
 The following code creates a collection with 100 rows, but sets the value of rows 50 and 51 to NULL. Since the above table does not allow nulls, these rows will result in an exception. The SAVE EXCEPTIONS clause allows the bulk operation to continue past any exceptions, but if any exceptions were raised in the whole operation, it will jump to the exception handler once the operation is complete. In this case, the exception handler just loops through the SQL%BULK_EXCEPTION cursor attribute to see what errors occured.
+
 
 SET SERVEROUTPUT ON
 DECLARE
@@ -379,7 +412,9 @@ END;
 /
 
 Number of failures: 2
+
 Error: 1 Array Index: 50 Message: ORA-01400: cannot insert NULL into ()
+
 Error: 2 Array Index: 51 Message: ORA-01400: cannot insert NULL into ()
 
 PL/SQL procedure successfully completed.
@@ -397,5 +432,8 @@ FROM   exception_test;
 1 row selected.
 
 SQL>
+
 Bulk Binds and Triggers
+------------------------
+
 For bulk updates and deletes the timing points remain unchanged. Each row in the collection triggers a before statement, before row, after row and after statement timing point. For bulk inserts, the statement level triggers only fire at the start and the end of the the whole bulk operation, rather than for each row of the collection. This can cause some confusion if you are relying on the timing points from row-by-row processing.
